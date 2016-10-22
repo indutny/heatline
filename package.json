@@ -1,0 +1,24 @@
+{
+  "name": "heatline",
+  "version": "1.0.0",
+  "description": "heat-based performance profile visualizer",
+  "main": "lib/heatline.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "heat",
+    "profile",
+    "performance"
+  ],
+  "author": "Fedor Indutny <fedor@indutny.com>",
+  "license": "MIT",
+  "dependencies": {
+    "async": "^2.1.2",
+    "bindings": "^1.2.1",
+    "blessed": "^0.1.81",
+    "debug": "^2.2.0",
+    "nan": "^2.4.0",
+    "yargs": "^6.3.0"
+  }
+}

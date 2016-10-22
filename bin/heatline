@@ -1,0 +1,267 @@
+#!/usr/bin/env node
+
+const heatline = require('../');
+
+const argv = require('yargs')
+    .describe('port', 'port number to connect to')
+    .default('port', 11337)
+    .describe('host', 'hostname')
+    .default('host', 'localhost')
+    .help('h')
+    .alias('p', 'port')
+    .alias('h', 'help')
+    .argv;
+
+const fs = require('fs');
+const path = require('path');
+const http = require('http');
+
+const async = require('async');
+const blessed = require('blessed');
+
+function Client(options) {
+  this.options = options || {};
+
+  this.agent = new http.Agent({ port: options.port, host: options.host });
+
+  this.screen = blessed.screen({ smartCSR: true });
+  this.screen.title = `Heatline ${options.host}:${options.port}`;
+
+  this.items = [];
+
+  this.initMenu();
+
+  this.left = blessed.box({
+    top: 1,
+    left: '0%',
+    width: '50%'
+  });
+
+  this.right = blessed.box({
+    top: 1,
+    left: '50%',
+    width: '50%'
+  });
+
+  this.screen.append(this.menu);
+  this.screen.append(this.left);
+  this.screen.append(this.right);
+
+  this.tree = blessed.list({
+    label: 'Call tree',
+    keys: true,
+    vi: true,
+    border: { type: 'line' },
+    style: { selected: { fg: 'white', bg: 'blue' } }
+  });
+
+  this.source = blessed.list({
+    label: 'Source',
+    keys: true,
+    vi: true,
+    border: { type: 'line' },
+    style: { selected: { fg: 'white', bg: 'blue' } }
+  });
+
+  this.left.append(this.tree);
+  this.right.append(this.source);
+
+  this.menu.focus();
+
+  this.tree.on('select', (_, num) => {
+    this.updateSource(num, () => {
+      this.update();
+    });
+  });
+
+  this.source.key([ 'escape', 'tab' ], () => {
+    this.tree.focus();
+    this.update();
+  });
+
+  this.tree.key([ 'escape', 'tab' ], () => {
+    this.source.focus();
+    this.update();
+  });
+
+  this.update();
+}
+
+Client.prototype.initMenu = function initMenu() {
+  this.menu = blessed.listbar({
+    autoCommandKeys: false,
+    keys: true,
+
+    top: '0%',
+    left: '0%',
+    width: '100%',
+    height: 1,
+    style: {
+      bg: 'black',
+      item: {
+        bg: 'white',
+        fg: 'black'
+      },
+      selected: {
+        bg: 'white',
+        fg: 'black'
+      }
+    }
+  });
+
+  this.menu.addItem({
+    text: 'Exit',
+    keys: [ 'q', 'C-c' ],
+    callback: () => {
+      this.exit();
+    }
+  });
+
+  this.menu.addItem({
+    text: 'Start',
+    keys: [ 'f10' ],
+    callback: () => {
+      this.start();
+    }
+  });
+
+  this.menu.addItem({
+    text: 'Stop',
+    keys: [ 'f11' ],
+    callback: () => {
+      this.stop();
+    }
+  });
+};
+
+Client.prototype.update = function update() {
+  this.screen.render();
+};
+
+Client.prototype.exit = function exit() {
+  process.exit(0);
+};
+
+Client.prototype.post = function post(path, callback) {
+  const req = http.request({
+    method: 'POST',
+    agent: this.agent,
+    path: path
+  }, (res) => {
+    let chunks = '';
+    res.on('data', chunk => chunks += chunk);
+    res.once('end', () => {
+      const err = (res.statusCode >= 200 && res.statusCode < 400) ?
+          null : new Error(`HTTP: ${res.statusCode}`);
+
+      callback(err, JSON.parse(chunks));
+    });
+  });
+  req.end();
+
+  req.once('error', err => callback(err));
+};
+
+Client.prototype.start = function start() {
+  this.post('/start', (err, body) => {
+    if (err) {
+      this.tree.setItems([ body.error ]);
+      this.source.setItems([ body.error ]);
+    } else {
+      this.tree.setItems([ 'running' ]);
+      this.source.setItems([ 'running' ]);
+    }
+    this.update();
+  });
+};
+
+Client.prototype.stop = function stop() {
+  this.post('/stop', (err, body) => {
+    if (err) {
+      this.tree.setItems([ body.error ]);
+      this.source.setItems([ body.error ]);
+      this.update();
+      return;
+    }
+
+    this.items = [];
+
+    this.tree.clearItems();
+    this.updateTree(body);
+    this.tree.focus();
+
+    this.source.setItems([ 'please select node on the left' ]);
+    this.update();
+  });
+};
+
+const pad = (depth) => {
+  let r = '';
+  for (let i = 0; i < depth; i++)
+    r += '  ';
+  return r;
+};
+
+Client.prototype.updateTree = function updateTree(node, depth) {
+  if (!depth)
+    depth = 0;
+
+  this.tree.pushItem(
+    `${pad(depth)}[${node.hits}] ${node.name || '(anonymous)'} ` +
+        `at ${path.basename(node.resourceName || '()')}:${node.column}`
+  );
+  this.items.push(node);
+
+  node.children.map(child => this.updateTree(child, depth + 1));
+};
+
+Client.prototype.findFile = function findFile(file, callback) {
+  const tries = [ file ].concat(this.options.path.map((dir) => {
+    return path.join(dir, file);
+  }));
+
+  async.filter(tries, (file, callback) => {
+    fs.exists(file, exists => callback(null, exists));
+  }, (err, items) => {
+    if (items.length === 0)
+      return callback(new Error('Not found'));
+
+    callback(null, items[0]);
+  });
+};
+
+Client.prototype.updateSource = function updateSource(num, callback) {
+  this.source.clearItems();
+  if (num >= this.items.length)
+    return;
+
+  const item = this.items[num];
+  this.findFile(item.resourceName, (err, filename) => {
+    if (err) {
+      this.source.pushItem('no source');
+      return callback(null);
+    }
+
+    let content = fs.readFileSync(filename).toString();
+    content = content.split(/\n|\r\n/g);
+
+    content = content.slice(item.line - 1).map(item => [ 0, item ]);
+
+    for (let i = 0; i < item.hitLines.length; i += 2) {
+      const line = item.hitLines[i];
+      const hits = item.hitLines[i + 1];
+
+      content[line - item.line][0] = hits;
+    }
+
+    content = content.map(item => item[0] + ': ' + item[1]);
+
+    this.source.setItems(content);
+    this.source.focus();
+    callback(null);
+  });
+};
+
+argv.path = process.env.HEATLINE_PATH.split(':');
+
+const c = new Client(argv);
