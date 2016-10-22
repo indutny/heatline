@@ -277,6 +277,6 @@ Client.prototype.updateSource = function updateSource(num, callback) {
   });
 };
 
-argv.path = process.env.HEATLINE_PATH.split(':');
+argv.path = (process.env.HEATLINE_PATH || '').split(':');
 
 const c = new Client(argv);
