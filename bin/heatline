@@ -202,6 +202,13 @@ const pad = (depth) => {
   return r;
 };
 
+const padNum = (num, length) => {
+  let r = num.toString();
+  while (r.length < length)
+    r += ' ';
+  return r;
+};
+
 Client.prototype.updateTree = function updateTree(node, depth) {
   if (!depth)
     depth = 0;
@@ -247,14 +254,22 @@ Client.prototype.updateSource = function updateSource(num, callback) {
 
     content = content.slice(item.line - 1).map(item => [ 0, item ]);
 
+    let max = 0;
     for (let i = 0; i < item.hitLines.length; i += 2) {
       const line = item.hitLines[i];
       const hits = item.hitLines[i + 1];
 
+      max = Math.max(max, hits);
+
+      const index = line - item.line;
+      if (index >= content.length)
+        continue;
       content[line - item.line][0] = hits;
     }
 
-    content = content.map(item => item[0] + ': ' + item[1]);
+    const maxLen = max.toString().length;
+
+    content = content.map(item => padNum(item[0], maxLen) + ': ' + item[1]);
 
     this.source.setItems(content);
     this.source.focus();
