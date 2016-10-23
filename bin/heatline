@@ -165,8 +165,9 @@ Client.prototype.post = function post(path, callback) {
 Client.prototype.start = function start() {
   this.post('/start', (err, body) => {
     if (err) {
-      this.tree.setItems([ body.error ]);
-      this.source.setItems([ body.error ]);
+      err = body ? body.error : err.message;
+      this.tree.setItems([ err ]);
+      this.source.setItems([ err ]);
     } else {
       this.tree.setItems([ 'running' ]);
       this.source.setItems([ 'running' ]);
@@ -178,15 +179,15 @@ Client.prototype.start = function start() {
 Client.prototype.stop = function stop() {
   this.post('/stop', (err, body) => {
     if (err) {
-      this.tree.setItems([ body.error ]);
-      this.source.setItems([ body.error ]);
+      err = body ? body.error : err.message;
+      this.tree.setItems([ err ]);
+      this.source.setItems([ err ]);
       this.update();
       return;
     }
 
     this.items = [];
 
-    this.tree.clearItems();
     this.updateTree(body);
     this.tree.focus();
 
@@ -209,20 +210,67 @@ const padNum = (num, length) => {
   return r;
 };
 
-Client.prototype.updateTree = function updateTree(node, depth) {
-  if (!depth)
-    depth = 0;
+Client.prototype.updateTree = function updateTree(tree) {
+  this.tree.clearItems();
 
-  this.tree.pushItem(
-    `${pad(depth)}[${node.hits}] ${node.name || '(anonymous)'} ` +
-        `at ${path.basename(node.resourceName || '()')}:${node.column}`
-  );
-  this.items.push(node);
+  this.indexTree(tree);
+};
 
-  node.children.map(child => this.updateTree(child, depth + 1));
+function Entry(node) {
+  this.node = node;
+  this.parents = [];
+}
+
+Client.prototype.indexTree = function indexTree(tree) {
+  const entries = new Map();
+
+  function link(parent, node) {
+    let entry;
+    if (entries.has(node.callUid)) {
+      entry = entries.get(node.callUid);
+    } else {
+      entry = new Entry(node);
+      entries.set(node.callUid, entry);
+    }
+
+    if (parent !== null)
+      entry.parents.push(parent);
+
+    node.children.forEach(child => link(entry, child));
+  }
+
+  link(null, tree);
+
+  let pairs = [];
+  entries.forEach((value, key) => pairs.push({ key: key, value: value }));
+
+  pairs.sort((a, b) => {
+    return b.value.node.hits - a.value.node.hits;
+  });
+
+  const addBranch = (entry, depth) => {
+    const node = entry.node;
+
+    // Print only once
+    if (!entries.has(node.callUid) || depth > 10)
+      return;
+    entries.delete(node.callUid);
+
+    this.tree.pushItem(
+        `${pad(depth)}[${node.hits}] ${node.name || '(anonymous)'} ` +
+        `at ${path.basename(node.resourceName || '()')}:${node.column}`);
+    this.items.push(node);
+
+    entry.parents.forEach(parent => addBranch(parent, depth + 1));
+  }
+
+  pairs.forEach(pair => addBranch(pair.value, 0));
 };
 
 Client.prototype.findFile = function findFile(file, callback) {
+  if (!file)
+    return callback(new Error('No file'));
+
   const tries = [ file ].concat(this.options.path.map((dir) => {
     return path.join(dir, file);
   }));
@@ -249,6 +297,7 @@ Client.prototype.updateSource = function updateSource(num, callback) {
       return callback(null);
     }
 
+    this.source.setLabel(`Source: ${path.relative('.', filename)}`);
     let content = fs.readFileSync(filename).toString();
     content = content.split(/\n|\r\n/g);
 
@@ -264,7 +313,7 @@ Client.prototype.updateSource = function updateSource(num, callback) {
       const index = line - item.line;
       if (index >= content.length)
         continue;
-      content[line - item.line][0] = hits;
+      content[index][0] = hits;
     }
 
     const maxLen = max.toString().length;

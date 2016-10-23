@@ -178,6 +178,8 @@ Local<Value> CpuProfileNodeWrap::Get() {
       }
     case What::kHitCount:
       return Nan::New<Number>(node_->GetHitCount());
+    case What::kCallUid:
+      return Nan::New<Number>(node_->GetCallUid());
     case What::kHitLines:
       {
         Local<Array> res = Nan::New<Array>();
@@ -211,6 +213,7 @@ void CpuProfileNodeWrap::Init(Local<Object> target) {
   Nan::SetPrototypeMethod(t, "getColumn", Get<What::kColumn>);
   Nan::SetPrototypeMethod(t, "getChildren", Get<What::kChildren>);
   Nan::SetPrototypeMethod(t, "getHitCount", Get<What::kHitCount>);
+  Nan::SetPrototypeMethod(t, "getCallUid", Get<What::kCallUid>);
   Nan::SetPrototypeMethod(t, "getHitLines", Get<What::kHitLines>);
 
   constructor_.Reset(Nan::GetFunction(t).ToLocalChecked());

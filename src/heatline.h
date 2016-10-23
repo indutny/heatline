@@ -64,7 +64,8 @@ class CpuProfileNodeWrap : public Nan::ObjectWrap {
     kColumn,
     kChildren,
     kHitCount,
-    kHitLines
+    kCallUid,
+    kHitLines,
   };
 
   static NAN_METHOD(New);
