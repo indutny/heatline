@@ -272,6 +272,9 @@ Client.prototype.indexTree = function indexTree(tree) {
         `at ${path.basename(node.resourceName || '()')}:${node.column}`);
     this.items.push(node);
 
+    entry.parents.sort((a, b) => {
+      return b.node.hits - a.node.hits;
+    });
     entry.parents.forEach(parent => addBranch(parent, depth + 1));
   }
 
