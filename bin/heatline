@@ -84,6 +84,17 @@ function Client(options) {
     this.update();
   });
 
+  function focusColor(elem) {
+    elem.on('focus', () => {
+      elem.style.border.fg = 'red';
+    });
+    elem.on('blur', () => {
+      elem.style.border.fg = 'gray';
+    });
+  }
+  focusColor(this.tree);
+  focusColor(this.source);
+
   this.update();
 }
 
