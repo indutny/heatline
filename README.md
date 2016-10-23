@@ -41,6 +41,10 @@ parts: cli tool and a module to be included in user application.
 require('heatline')();  // will start a server on port number 11337
 ```
 
+**NOTE:: node.js should be started with `--hydrogen_track_positions` in order
+to get line hits for optimized functions too. Unfortunately this prints tons
+of stuff to stdout so use wisely**
+
 ## CLI tool
 
 One demo is better than a thousand of words:
