@@ -2,6 +2,9 @@
   "name": "heatline",
   "version": "1.0.0",
   "description": "heat-based performance profile visualizer",
+  "bin": {
+    "heatline": "bin/heatline"
+  },
   "main": "lib/heatline.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
